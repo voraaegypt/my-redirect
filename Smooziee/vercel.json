@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/Smooziee/Featured.html",
+      "destination": "/index.html"
+    }
+  ]
+}
