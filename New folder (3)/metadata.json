@@ -1,6 +1,0 @@
-{
-  "name": "محرر واجهات المواقع",
-  "description": "أداة مرئية لتعديل وتصميم واجهات مواقع الويب وإضافة أو حذف وتنسيق العناصر بدون كود مع ميزة التحميل المباشر للـ HTML بعد التعديل.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
