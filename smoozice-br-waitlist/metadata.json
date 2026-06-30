@@ -1,0 +1,6 @@
+{
+  "name": "Smoozice br Waitlist",
+  "description": "A minimalist e-commerce waitlist landing page for the Smoozice br hairbrush brand, featuring a warm pastel pink background, stylized hero illustration, interactive Arabic questionnaire form, and an aesthetic photo collage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
