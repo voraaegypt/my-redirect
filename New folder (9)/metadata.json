@@ -1,0 +1,6 @@
+{
+  "name": "Inside-Out VR Tracker",
+  "description": "A high-performance stereoscopic VR application that uses your phone's back camera to simulate inside-out 6-DoF tracking with advanced optical flow.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
