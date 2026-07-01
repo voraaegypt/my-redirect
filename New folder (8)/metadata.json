@@ -1,0 +1,6 @@
+{
+  "name": "Inside-Out Tracking Mobile VR",
+  "description": "Stereoscopic Mobile VR with 6-DoF inside-out motion tracking using standard back camera computer vision and Three.js.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
