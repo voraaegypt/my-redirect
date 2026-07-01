@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spatial OS Pro - Apple Vision Demo</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        /* تقسيم شاشة الهاتف لنظام VR */
+        .vr-viewport { display: flex; width: 100vw; height: 100vh; }
+        .eye-view { width: 50vw; height: 100vh; }
+        #leftEye { border-right: 1px solid #111; }
+        
+        /* شاشة الكاميرا الخلفية الحقيقية (مخفية ومصغرة للتحليل) */
+        #cameraStream { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 100px; height: 75px; border: 1px solid #333; z-index: 100; opacity: 0.4; }
+        
+        /* مؤشر الحالة والتعليمات للمستخدم */
+        #hud-display { position: absolute; top: 15px; width: 100%; text-align: center; color: #00ffcc; font-size: 14px; z-index: 100; font-weight: bold; text-shadow: 0px 0px 5px rgba(0,255,204,0.8); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="hud-display">نظام الحوسبة المكانية: حرك يدك أمام الكاميرا لتحريك المؤشر.. اقترب بقوة لعمل Air Click</div>
+    <video id="cameraStream" autoplay playsinline muted></video>
+    
+    <div class="vr-viewport">
+        <canvas id="leftEye" class="eye-view"></canvas>
+        <canvas id="rightEye" class="eye-view"></canvas>
+    </div>
+
+    <script>
+        // --- 1. بناء البيئة المكانية 3D (Spatial Environment) ---
+        const leftCanvas = document.getElementById('leftEye');
+        const rightCanvas = document.getElementById('rightEye');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a14); // فضاء سينمائي مظلم
+        scene.fog = new THREE.FogExp2(0x0a0a14, 0.08);
+
+        // إضاءة الغرفة الافتراضية
+        const ambientLight = new THREE.AmbientLight(0x333333);
+        scene.add(ambientLight);
+        const neonLight = new THREE.PointLight(0x00ffcc, 1, 50);
+        neonLight.position.set(0, 5, -5);
+        scene.add(neonLight);
+
+        // إضافة أرضية شبكية (Grid Matrix) لإعطاء إحساس بالمكان
+        const gridHelper = new THREE.GridHelper(60, 60, 0x00ffcc, 0x222233);
+        gridHelper.position.y = -2;
+        scene.add(gridHelper);
+
+        // --- 2. صناعة الشاشات العائمة (Floating Screens) ---
+        
+        // الشاشة الرئيسية (مشغل الفيديو العائم)
+        const screenGeometry = new THREE.PlaneGeometry(4, 2.5);
+        // سنستخدم لون فسفوري كمحاكاة لمشغل ميديا عائم متطور
+        const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x0055ff, side: THREE.DoubleSide });
+        const floatingScreen = new THREE.Mesh(screenGeometry, screenMaterial);
+        floatingScreen.position.set(0, 1, -4); // عائمة على بعد 4 أمتار أمام المستخدم
+        scene.add(floatingScreen);
+
+        // إطار حماية مضيء للشاشة (Glow Effect)
+        const edges = new THREE.EdgesGeometry(screenGeometry);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00ffcc, linewidth: 2 });
+        const wireframe = new THREE.LineSegments(edges, lineMat);
+        floatingScreen.add(wireframe);
+
+        // لوحة التحكم الجانبية (Dashboard Widgets)
+        const panelGeom = new THREE.PlaneGeometry(1.2, 2);
+        const panelMat = new THREE.MeshLambertMaterial({ color: 0x111122, transparent: true, opacity: 0.8 });
+        const sidePanel = new THREE.Mesh(panelGeom, panelMat);
+        sidePanel.position.set(3, 1, -3.8);
+        sidePanel.rotation.y = -0.4; // مائلة بزاوية اتجاه راس المستخدم
+        scene.add(sidePanel);
+
+        // --- 3. ليزر ومؤشر الإيد السحري (Spatial Cursor) ---
+        const cursorGeom = new THREE.SphereGeometry(0.08, 32, 32);
+        const cursorMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        const handCursor = new THREE.Mesh(cursorGeom, cursorMat);
+        handCursor.position.set(0, 0, -2); // يبدأ في المنتصف
+        scene.add(handCursor);
+
+        // --- 4. إعداد الكاميرات المتزامنة لنظام الـ VR ---
+        const aspect = (window.innerWidth / 2) / window.innerHeight;
+        const mainAnchor = new THREE.Group(); // الأب الروحي للكاميرات لمنع اختلال التوازن
+        
+        const camLeft = new THREE.PerspectiveCamera(70, aspect, 0.1, 1000);
+        const camRight = new THREE.PerspectiveCamera(70, aspect, 0.1, 1000);
+        
+        // إزاحة العينين (IPD) لإنتاج الـ 3D الحقيقي
+        camLeft.position.x = -0.15;
+        camRight.position.x = 0.15;
+        
+        mainAnchor.add(camLeft);
+        mainAnchor.add(camRight);
+        mainAnchor.position.set(0, 1.2, 0); // ارتفاع النظر
+        scene.add(mainAnchor);
+
+        // محرك العرض (Renderers)
+        const renderLeft = new THREE.WebGLRenderer({ canvas: leftCanvas, antialias: true });
+        const renderRight = new THREE.WebGLRenderer({ canvas: rightCanvas, antialias: true });
+        
+        function updateSize() {
+            const w = window.innerWidth / 2;
+            const h = window.innerHeight;
+            camLeft.aspect = w / h; camLeft.updateProjectionMatrix();
+            camRight.aspect = w / h; camRight.updateProjectionMatrix();
+            renderLeft.setSize(w, h);
+            renderRight.setSize(w, h);
+        }
+        window.addEventListener('resize', updateSize);
+        updateSize();
+
+        // --- 5. الذكاء الاصطناعي لتتبع حركة اليد (Computer Vision Loop) ---
+        const video = document.getElementById('cameraStream');
+        let prevFrame = null;
+        
+        // فتح كاميرا البيئة الخلفية للهاتف
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(() => { navigator.mediaDevices.getUserMedia({ video: true }).then(stream => video.srcObject = stream); });
+
+        const processCanvas = document.createElement('canvas');
+        const processCtx = processCanvas.getContext('2d');
+        processCanvas.width = 80; // حجم صغير جداً لسرعة خارقة بدون لاق
+        processCanvas.height = 60;
+
+        function analyzeHandMovement() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                processCtx.drawImage(video, 0, 0, processCanvas.width, processCanvas.height);
+                const currentFrame = processCtx.getImageData(0, 0, processCanvas.width, processCanvas.height);
+                
+                if (prevFrame) {
+                    let totalMotionX = 0;
+                    let totalMotionY = 0;
+                    let matchCount = 0;
+                    let forwardPinchAmount = 0;
+
+                    // مسح بكسلات الشاشة تكتيكياً لمعرفة تركز حركة اليد
+                    for (let y = 0; y < processCanvas.height; y += 2) {
+                        for (let x = 0; x < processCanvas.width; x += 2) {
+                            const idx = (y * processCanvas.width + x) * 4;
+                            
+                            // حساب الفارق اللوني بين الفريم الحالي والسابق
+                            const diff = Math.abs(currentFrame.data[idx] - prevFrame.data[idx]);
+                            
+                            if (diff > 40) { // تم رصد حركة بكسل سريعة (اليد تحركت هنا)
+                                totalMotionX += x;
+                                totalMotionY += y;
+                                matchCount++;
+                                forwardPinchAmount += diff;
+                            }
+                        }
+                    }
+
+                    if (matchCount > 15) {
+                        // حساب مركز ثقل الحركة (وين يد المستخدم موجودة بالظبط في الكاميرا)
+                        const avgX = totalMotionX / matchCount;
+                        const avgY = totalMotionY / matchCount;
+
+                        // تحويل إحداثيات الكاميرا ثنائية الأبعاد إلى الفضاء المكاني 3D للمؤشر
+                        const targetX = ((avgX / processCanvas.width) - 0.5) * -5; // معكوس لتطابق الاتجاه
+                        const targetY = ((1 - (avgY / processCanvas.height)) - 0.5) * 3;
+
+                        // تنعيم حركة المؤشر السحري (Lerp Interpolation) لمنع الرعشة
+                        handCursor.position.x += (targetX - handCursor.position.x) * 0.2;
+                        handCursor.position.y += (targetY - handCursor.position.y) * 0.2;
+
+                        // تكتيك الـ Air Click: لو الحركة كانت ضخمة ومفاجئة للأمام (تغير قيم البكسلات عالي جداً)
+                        const clickIntensity = forwardPinchAmount / matchCount;
+                        if (clickIntensity > 80) { 
+                            triggerAirClick();
+                        }
+                    }
+                }
+                prevFrame = currentFrame;
+            }
+            setTimeout(analyzeHandMovement, 30); // تحديث فوري فائق السرعة
+        }
+        video.addEventListener('play', analyzeHandMovement);
+
+        // تأثير الـ Air Click السحري
+        let isVideoPlaying = true;
+        function triggerAirClick() {
+            // فحص لو المؤشر يشير حالياً على الشاشة الطائرة
+            if (Math.abs(handCursor.position.x) < 2 && Math.abs(handCursor.position.y - 1) < 1.25) {
+                isVideoPlaying = !isVideoPlaying;
+                document.getElementById('hud-display').innerText = isVideoPlaying ? "Air Click: تم تشغيل الميديا ◀" : "Air Click: تم إيقاف الميديا ⏸";
+                // تغيير لون الشاشة كاستجابة بصرية للضغط في الهواء
+                floatingScreen.material.color.setHex(isVideoPlaying ? 0x0055ff : 0xff5500);
+            }
+        }
+
+        // --- 6. حلقة التحديث المستمر والنظر (OS Engine Loop) ---
+        function runOS() {
+            requestAnimationFrame(runOS);
+
+            // محاكاة طوفان ونعومة الشاشات في الفضاء
+            floatingScreen.position.y = 1 + Math.sin(Date.now() * 0.001) * 0.05;
+            sidePanel.position.y = 1 + Math.cos(Date.now() * 0.001) * 0.03;
+
+            // رندر مستقل لكل عين لإنتاج المشهد السينمائي داخل النظارة
+            renderLeft.render(scene, camLeft);
+            renderRight.render(scene, camRight);
+        }
+
+        runOS();
+    </script>
+</body>
+</html>
